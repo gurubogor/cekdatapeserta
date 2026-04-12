@@ -31,6 +31,11 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #fff7ed; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #fb923c; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #f97316; }
+        .scanner-line {
+            width: 100%; height: 2px; background: #f97316; position: absolute; top: 0; left: 0;
+            box-shadow: 0 0 10px #f97316, 0 0 20px #f97316; animation: scan 2s infinite linear;
+        }
+        @keyframes scan { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
     </style>
 </head>
 <body class="bg-gradient-to-b from-brand-light to-white text-gray-800 font-sans min-h-screen flex flex-col" onload="initApp()">
@@ -376,21 +381,6 @@
                 ? `<img src="${cleanFotoUrl}" class="w-20 h-28 md:w-24 md:h-32 object-cover rounded-xl border-[3px] border-white shadow-md bg-gray-50 flex-shrink-0" referrerpolicy="no-referrer" alt="Foto">` 
                 : `<div class="w-20 h-28 md:w-24 md:h-32 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-[10px] text-center rounded-xl bg-white shadow-sm flex-shrink-0">Foto Kosong</div>`;
 
-            // Setup QR (API Eksternal sementara)
-            const qrUrl = reg.docUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(reg.docUrl)}&margin=0` : '';
-            const docElement = reg.docUrl 
-                ? `<div style="display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc;">
-                    <img src="${qrUrl}" style="width: 65px; height: 65px; flex-shrink: 0;" alt="QR Code" referrerpolicy="no-referrer">
-                    <div style="display: flex; flex-direction: column; overflow: hidden;">
-                        <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Link Dokumen Berkas:</span>
-                        <a href="${reg.docUrl}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: underline; word-break: break-all; line-height: 1.3;">
-                            ${reg.docUrl}
-                        </a>
-                    </div>
-                   </div>` 
-                : `<div style="padding: 10px; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; color: #94a3b8; font-size: 12px;">Dokumen Tidak Tersedia</div>`;
-
-
             document.getElementById('view-peserta-content').innerHTML = `
                 <div class="-m-2 md:-m-4">
                     <div class="w-full max-w-sm mx-auto bg-white rounded-2xl overflow-hidden shadow-lg border border-orange-200 font-sans relative">
@@ -437,16 +427,11 @@
                             </div>
                         </div>
 
-                        <div class="bg-gray-50 px-4 py-3 border-t border-gray-200 flex justify-between items-center relative z-10">
+                        <div class="bg-gray-50 px-4 py-3 border-t border-gray-200 flex justify-between items-center relative z-10 mt-auto">
                             <span class="text-[10px] font-bold text-gray-500 uppercase">Status Verifikasi</span>
                             <span class="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-extrabold border ${statusInfo.class} shadow-sm">
                                 ${statusInfo.label}
                             </span>
-                        </div>
-                        
-                        <div class="px-4 py-3 bg-white border-t border-gray-200 mt-auto">
-                            <h4 style="font-size: 12px; font-weight: 800; color: #1e293b; margin-bottom: 8px; border-left: 4px solid #f97316; padding-left: 8px;">VERIFIKASI BERKAS DIGITAL</h4>
-                            ${docElement}
                         </div>
 
                     </div>
