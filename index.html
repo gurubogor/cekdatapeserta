@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     
+    <!-- Library Eksternal -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
     <script>
         tailwind.config = {
             theme: {
@@ -28,11 +31,6 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #fff7ed; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #fb923c; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #f97316; }
-        .scanner-line {
-            width: 100%; height: 2px; background: #f97316; position: absolute; top: 0; left: 0;
-            box-shadow: 0 0 10px #f97316, 0 0 20px #f97316; animation: scan 2s infinite linear;
-        }
-        @keyframes scan { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
     </style>
 </head>
 <body class="bg-gradient-to-b from-brand-light to-white text-gray-800 font-sans min-h-screen flex flex-col" onload="initApp()">
@@ -63,15 +61,15 @@
         </div>
     </div>
 
-    <!-- MODAL SCANNER QR (Opsional jika ingin diaktifkan) -->
-    <div id="qrModal" class="fixed inset-0 bg-black bg-opacity-90 z-[60] hidden flex flex-col items-center justify-center p-4">
-        <h3 class="text-white text-xl font-bold mb-4">Arahkan QR Code Peserta</h3>
-        <div class="relative w-64 h-64 border-4 border-orange-500 rounded-lg overflow-hidden bg-gray-800 flex items-center justify-center shadow-2xl shadow-orange-500/20">
-            <i class="fas fa-qrcode text-orange-600 text-9xl opacity-30"></i>
-            <div class="scanner-line"></div>
-        </div>
-        <p class="text-orange-300 mt-4 text-sm" id="qr-status-text">Memindai...</p>
-        <button onclick="closeFormModal('qrModal')" class="mt-8 bg-white text-orange-600 px-8 py-3 rounded-full font-bold hover:bg-orange-50 transition shadow-lg">Batal</button>
+    <!-- MODAL SCANNER QR -->
+    <div id="qrModal" class="fixed inset-0 bg-black bg-opacity-95 z-[60] hidden flex flex-col items-center justify-center p-4">
+        <h3 class="text-white text-lg font-bold mb-4 text-center">Arahkan Kamera ke QR Code Peserta</h3>
+        <!-- Kontainer tempat video scanner akan dimuat -->
+        <div id="reader" class="w-full max-w-sm rounded-xl overflow-hidden bg-black shadow-2xl shadow-orange-500/20 border-4 border-orange-500"></div>
+        <p class="text-orange-300 mt-4 text-sm font-medium text-center px-4" id="qr-status-text">Meminta akses kamera...</p>
+        <button onclick="closeScanner()" class="mt-8 bg-red-500 text-white px-8 py-3 rounded-full font-bold hover:bg-red-600 transition shadow-lg flex items-center">
+            <i class="fas fa-times mr-2"></i> Batal / Tutup Kamera
+        </button>
     </div>
 
     <!-- NAVIGATION BAR -->
@@ -113,10 +111,17 @@
                     <div class="flex flex-col space-y-5 relative z-10">
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">ID Peserta (5 Digit)</label>
-                            <div class="flex space-x-3">
-                                <input type="text" id="input-cek-id" maxlength="5" style="text-transform: uppercase;" class="flex-grow appearance-none rounded-xl border-2 border-gray-200 px-4 py-3 text-xl tracking-widest font-mono text-center text-gray-900 focus:outline-none focus:ring-0 focus:border-orange-500 transition-colors bg-gray-50 focus:bg-white shadow-inner" placeholder="FS2026">
-                                <button onclick="cariPesertaManual()" class="bg-gradient-to-r from-orange-500 to-orange-400 hover:from-orange-600 hover:to-orange-500 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-orange-500/30 transform hover:-translate-y-0.5">
-                                    <i class="fas fa-search"></i>
+                            <div class="flex space-x-2 md:space-x-3">
+                                <input type="text" id="input-cek-id" maxlength="5" style="text-transform: uppercase;" class="flex-grow w-full appearance-none rounded-xl border-2 border-gray-200 px-3 md:px-4 py-3 text-lg md:text-xl tracking-widest font-mono text-center text-gray-900 focus:outline-none focus:ring-0 focus:border-orange-500 transition-colors bg-gray-50 focus:bg-white shadow-inner" placeholder="FS2026">
+                                
+                                <!-- Tombol Scan QR -->
+                                <button onclick="openScanner()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl transition shadow-inner border border-gray-200 flex items-center justify-center" title="Scan QR Code dengan Kamera">
+                                    <i class="fas fa-qrcode text-xl md:text-2xl"></i>
+                                </button>
+                                
+                                <!-- Tombol Cari Manual -->
+                                <button onclick="cariPesertaManual()" class="bg-gradient-to-r from-orange-500 to-orange-400 hover:from-orange-600 hover:to-orange-500 text-white font-bold py-3 px-5 md:px-6 rounded-xl transition shadow-lg shadow-orange-500/30 transform hover:-translate-y-0.5">
+                                    <i class="fas fa-search text-lg"></i>
                                 </button>
                             </div>
                             <p class="text-xs text-gray-400 mt-3 text-center">Contoh: A001, B012, C105</p>
@@ -145,6 +150,7 @@
 
         let DATA_REGISTRATIONS = [];
         let globalModalTimer;
+        let html5QrCode; // Instance untuk scanner QR
 
         // Fungsi inisialisasi awal saat load
         async function initApp() {
@@ -159,6 +165,14 @@
             });
 
             await fetchDatabase();
+            
+            // Cek URL Param jika dibuka via scan kamera native
+            const urlParams = new URLSearchParams(window.location.search);
+            const idFromUrl = urlParams.get('id');
+            if (idFromUrl) {
+                document.getElementById('input-cek-id').value = idFromUrl;
+                prosesCariPeserta(idFromUrl);
+            }
         }
 
         // Fungsi fetch data dari Google Apps Script
@@ -217,6 +231,77 @@
 
         function openFormModal(modalId) { document.getElementById(modalId).classList.remove('hidden'); }
         function closeFormModal(modalId) { document.getElementById(modalId).classList.add('hidden'); }
+
+        // --- LOGIKA SCANNER QR CODE KAMERA ---
+        function openScanner() {
+            openFormModal('qrModal');
+            document.getElementById('qr-status-text').innerText = "Meminta akses kamera...";
+            
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            // Menjalankan dengan kamera belakang
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+            .then(() => {
+                document.getElementById('qr-status-text').innerText = "Arahkan Kamera ke QR Code Peserta.";
+            })
+            .catch((err) => {
+                document.getElementById('qr-status-text').innerText = "Gagal mengakses kamera. Izinkan penggunaan kamera browser Anda.";
+                console.error("Camera access error:", err);
+            });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            if(html5QrCode) {
+                // Hentikan kamera dan proses
+                html5QrCode.stop().then(() => {
+                    closeFormModal('qrModal');
+                    processScannedText(decodedText);
+                }).catch((err) => {
+                    console.error("Failed to stop scanner", err);
+                });
+            }
+        }
+        
+        function onScanFailure(error) {
+            // Berjalan tiap frame, kita hiraukan error log untuk background scanning
+        }
+
+        function closeScanner() {
+            if(html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    closeFormModal('qrModal');
+                }).catch((err) => {
+                    closeFormModal('qrModal');
+                });
+            } else {
+                closeFormModal('qrModal');
+            }
+        }
+
+        function processScannedText(text) {
+            let extractedId = text;
+            // Ekstrak ID jika QR berupa URL
+            if(text.includes('?id=')) {
+                extractedId = text.split('?id=')[1];
+            } else if(text.includes('id=')) {
+                extractedId = text.split('id=')[1];
+            } else if(text.includes('http')) {
+                extractedId = text.split('/').pop();
+            }
+            
+            // Bersihkan format (Max 5 digit)
+            extractedId = extractedId.trim().substring(0, 5).toUpperCase();
+            document.getElementById('input-cek-id').value = extractedId;
+            
+            // Trigger pencarian langsung
+            if (extractedId.length === 5) {
+                prosesCariPeserta(extractedId);
+            } else {
+                showModal('Gagal', 'Format QR Code tidak dikenali atau ID tidak lengkap.', 'error');
+            }
+        }
+
 
         // --- PENCARIAN PESERTA ---
         function cariPesertaManual() {
