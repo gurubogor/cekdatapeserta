@@ -102,253 +102,107 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwgiaujeKcPpf2HQWHKZcICxsrFAlIvdgV4hq6EuGEIY40IaX14wu80BwftWIrr38YY/exec";
 
         let DATA_REGISTRATIONS = [];
-        let globalModalTimer;
-        let html5QrCode; // Instance untuk scanner QR
 
-        // Fungsi inisialisasi awal saat load
+        // Eksekusi utama saat halaman dimuat
         async function initApp() {
-            showModal('Sedang Memuat', 'Menarik data pendaftaran dari server...', 'info', true, 0);
-            
-            // Tambahkan listener untuk input enter
-            document.getElementById('input-cek-id').addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    cariPesertaManual();
-                }
-            });
-
-            await fetchDatabase();
-            
-            // Cek URL Param setelah database selesai di-fetch
+            // Cek apakah ada parameter ?id= di URL
             const urlParams = new URLSearchParams(window.location.search);
             const idFromUrl = urlParams.get('id');
-            
+
+            // Tarik data dari server
+            await fetchDatabase();
+
             if (idFromUrl) {
-                document.getElementById('input-cek-id').value = idFromUrl;
-                // Langsung ubah halaman jadi kartu peserta
-                tampilkanKartuKeHalaman(idFromUrl);
+                // Jika ada ID di URL, langsung proses datanya
+                prosesDataLangsung(idFromUrl);
             } else {
-                closeModal(); // Tutup loading modal jika tidak ada parameter ID
+                // Jika tidak ada ID, tampilkan form pencarian biasa
+                tampilkanPencarian();
             }
         }
 
-        // Fungsi fetch data dari Google Apps Script
         async function fetchDatabase() {
             try {
                 const response = await fetch(SCRIPT_URL + "?action=getAll").then(r => r.json()).catch(() => null);
                 if (response && response.status === 'success') {
                     DATA_REGISTRATIONS = response.data.pendaftaran || [];
                 } else {
-                    showModal('Gagal Memuat', 'Gagal terhubung ke database panitia.', 'error');
+                    tampilkanError("Gagal terhubung ke server pendaftaran. Silakan muat ulang halaman.");
                 }
             } catch (error) {
                 console.error(error);
-                showModal('Error Jaringan', 'Periksa koneksi internet Anda.', 'error');
+                tampilkanError("Terjadi kesalahan jaringan. Periksa koneksi internet Anda.");
             }
         }
 
-        // --- MANAJEMEN UI & MODAL ---
-        function toggleScaleModal(modalId, contentId, show) {
-            const modal = document.getElementById(modalId);
-            const content = document.getElementById(contentId);
-            if(!modal || !content) return;
-
-            if (show) {
-                modal.classList.remove('hidden');
-                setTimeout(() => { content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
-            } else {
-                content.classList.remove('scale-100'); content.classList.add('scale-95');
-                setTimeout(() => { modal.classList.add('hidden'); }, 200);
-            }
-        }
-
-        function showModal(title, message, type = 'info', hideBtn = false, timeout = 3000) {
-            document.getElementById('modalTitle').innerText = title;
-            document.getElementById('modalMessage').innerHTML = message;
-            
-            const icon = document.getElementById('modalIcon');
-            if(type === 'success') icon.className = 'fas fa-check-circle text-5xl mb-3 text-green-500';
-            else if (type === 'error') icon.className = 'fas fa-times-circle text-5xl mb-3 text-red-500';
-            else icon.className = 'fas fa-info-circle text-5xl mb-3 text-orange-500';
-
-            const btn = document.getElementById('btn-close-modal');
-            hideBtn ? btn.classList.add('hidden') : btn.classList.remove('hidden');
-
-            toggleScaleModal('customModal', 'modalContent', true);
-
-            clearTimeout(globalModalTimer);
-            if(timeout > 0) globalModalTimer = setTimeout(() => closeModal(), timeout);
-        }
-
-        function closeModal() {
-            clearTimeout(globalModalTimer);
-            toggleScaleModal('customModal', 'modalContent', false);
-        }
-
-        function openFormModal(modalId) { document.getElementById(modalId).classList.remove('hidden'); }
-        function closeFormModal(modalId) { document.getElementById(modalId).classList.add('hidden'); }
-
-        // --- LOGIKA SCANNER QR CODE KAMERA ---
-        function openScanner() {
-            openFormModal('qrModal');
-            document.getElementById('qr-status-text').innerText = "Meminta akses kamera...";
-            
-            html5QrCode = new Html5Qrcode("reader");
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-
-            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
-            .then(() => {
-                document.getElementById('qr-status-text').innerText = "Arahkan Kamera ke QR Code Peserta.";
-            })
-            .catch((err) => {
-                document.getElementById('qr-status-text').innerText = "Gagal mengakses kamera. Izinkan penggunaan kamera browser Anda.";
-                console.error("Camera access error:", err);
-            });
-        }
-
-        function onScanSuccess(decodedText, decodedResult) {
-            if(html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    closeFormModal('qrModal');
-                    processScannedText(decodedText);
-                }).catch((err) => console.error("Failed to stop scanner", err));
-            }
-        }
-        
-        function onScanFailure(error) { }
-
-        function closeScanner() {
-            if(html5QrCode) {
-                html5QrCode.stop().then(() => closeFormModal('qrModal')).catch(() => closeFormModal('qrModal'));
-            } else {
-                closeFormModal('qrModal');
-            }
-        }
-
-        function processScannedText(text) {
-            let extractedId = text;
-            if(text.includes('?id=')) extractedId = text.split('?id=')[1];
-            else if(text.includes('id=')) extractedId = text.split('id=')[1];
-            else if(text.includes('http')) extractedId = text.split('/').pop();
-            
-            extractedId = extractedId.trim().substring(0, 5).toUpperCase();
-            document.getElementById('input-cek-id').value = extractedId;
-            
-            if (extractedId.length === 5) {
-                tampilkanKartuKeHalaman(extractedId);
-            } else {
-                showModal('Gagal', 'Format QR Code tidak dikenali atau ID tidak lengkap.', 'error');
-            }
-        }
-
-
-        // --- PENCARIAN PESERTA ---
         function cariPesertaManual() {
-            const idInput = document.getElementById('input-cek-id').value.trim().toUpperCase();
-            if(idInput.length !== 5) { 
-                showModal('Format Salah', 'Harap masukkan persis 5 digit ID Peserta. Contoh: A001', 'error'); 
-                return; 
+            const inputVal = document.getElementById('input-cek-id').value.trim();
+            if(inputVal.length !== 5) {
+                alert("Format ID salah. Harus 5 karakter.");
+                return;
             }
-            // Ubah URL bar agar link bisa di-copy tanpa reload
-            window.history.pushState({}, '', '?id=' + idInput);
-            tampilkanKartuKeHalaman(idInput);
+            // Tambahkan parameter ke URL tanpa reload halaman (opsional, agar link bisa dicopy)
+            window.history.pushState({}, '', '?id=' + inputVal.toUpperCase());
+            
+            // Kembalikan ke state loading sebentar
+            document.getElementById('search-state').classList.add('hidden');
+            document.getElementById('loading-state').classList.remove('hidden');
+            
+            setTimeout(() => {
+                 prosesDataLangsung(inputVal);
+            }, 500); // Simulasi loading agar transisi halus
         }
 
-        // --- FUNGSI TAMPILKAN KARTU LANGSUNG KE HALAMAN UTAMA ---
-        function tampilkanKartuKeHalaman(idCari) {
+        function prosesDataLangsung(idCari) {
+            document.getElementById('loading-state').classList.add('hidden');
             const idCariKapital = String(idCari).toUpperCase();
             
-            // Cek peserta yang statusnya fix 'terdaftar' (disetujui)
+            // Cari data di array
             const peserta = DATA_REGISTRATIONS.find(p => String(p.idPeserta).toUpperCase() === idCariKapital && p.status === 'terdaftar');          
             
             if(peserta) {
-                closeModal(); // Pastikan modal loading/error tertutup
-                
-                const shortName = abbreviateName(peserta.namaPeserta);
-                const cleanFotoUrl = getCleanDriveImage(peserta.fotoUrl);
-                const fotoElement = peserta.fotoUrl 
-                    ? `<img src="${cleanFotoUrl}" class="w-24 h-32 object-cover rounded-xl border-[3px] border-white shadow-md bg-gray-50 flex-shrink-0" referrerpolicy="no-referrer" alt="Foto">` 
-                    : `<div class="w-24 h-32 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-[10px] text-center rounded-xl bg-white shadow-sm flex-shrink-0">Foto Kosong</div>`;
-
-                // Render Kartu ke tag <main> secara keseluruhan (Menghapus kotak pencarian)
-                const mainContainer = document.querySelector('main');
-                mainContainer.innerHTML = `
-                    <div class="flex flex-col items-center justify-center min-h-[80vh] px-4 sm:px-6 lg:px-8 py-10 w-full">
-                        <div class="w-full max-w-md mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl border border-orange-200 font-sans relative mb-6">
-                            
-                            <div class="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-orange-200 to-transparent rounded-bl-full opacity-40 z-0 pointer-events-none"></div>
-                            <div class="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-blue-100 to-transparent rounded-tr-full opacity-60 z-0 pointer-events-none"></div>
-                            <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] z-0 pointer-events-none"></div>
-
-                            <div class="bg-gradient-to-r from-orange-600 to-orange-400 px-5 py-4 flex items-center gap-4 relative z-10 shadow-sm">
-                                <div class="h-16 flex-shrink-0 bg-white p-1 rounded-lg">
-                                    <img src="https://i.ibb.co.com/Wvf6CP6Y/Cover-Lomba-2.png" class="h-full w-auto object-contain" alt="Logo">
-                                </div>
-                                <div class="text-left text-white flex-grow min-w-0">
-                                    <h2 class="text-[15px] font-black uppercase tracking-wider leading-tight drop-shadow-md">Kartu Peserta Lomba</h2>
-                                    <p class="text-[11px] font-semibold opacity-95 mt-0.5 uppercase tracking-wide leading-tight">Tingkat Kec. Sukamakmur<br>Tahun 2026</p>
-                                </div>
-                            </div>
-
-                            <div class="p-6 flex gap-5 items-center relative z-10 border-b border-gray-100">
-                                ${fotoElement}
-                                <div class="flex flex-col justify-center flex-grow min-w-0">
-                                    <h3 class="text-xl font-extrabold text-gray-900 leading-tight mb-2 truncate" title="${peserta.namaPeserta}">${shortName}</h3>
-                                    <div class="inline-flex items-center bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-lg text-sm font-black tracking-widest shadow-sm w-max">
-                                        <i class="fas fa-id-badge mr-2 opacity-70"></i> ${peserta.idPeserta}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="px-6 py-5 relative z-10 space-y-3 text-sm">
-                                <div class="flex justify-between border-b border-gray-100 pb-2">
-                                    <span class="font-bold text-gray-500 uppercase text-xs">NISN</span>
-                                    <span class="font-mono font-bold text-gray-800">${peserta.nisn}</span>
-                                </div>
-                                <div class="flex flex-col border-b border-gray-100 pb-2">
-                                    <span class="font-bold text-gray-500 uppercase text-xs mb-1">Asal Sekolah</span>
-                                    <span class="font-bold text-gray-800 text-base leading-tight">${peserta.namaSekolah}</span>
-                                </div>
-                                <div class="flex flex-col">
-                                    <span class="font-bold text-gray-500 uppercase text-xs mb-1">Cabang Lomba</span>
-                                    <span class="font-extrabold text-orange-600 text-base leading-tight">${peserta.lomba}</span>
-                                </div>
-                            </div>
-
-                            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center relative z-10">
-                                <span class="text-[10px] font-bold text-gray-500 uppercase">Status Cek</span>
-                                <span class="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-extrabold border bg-green-100 text-green-800 border-green-200 shadow-sm">
-                                    <i class="fas fa-check-circle mr-1"></i> Disetujui
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="w-full max-w-md space-y-3">
-                            <button onclick="window.print()" class="w-full bg-gray-800 text-white py-3.5 rounded-xl font-bold hover:bg-gray-900 transition flex justify-center items-center shadow-md">
-                                <i class="fas fa-print mr-2"></i> Cetak / Simpan PDF
-                            </button>
-                            <button onclick="window.location.href='cek-peserta.html'" class="w-full bg-white border border-gray-300 text-gray-600 py-3.5 rounded-xl font-bold hover:bg-gray-50 transition flex justify-center items-center shadow-sm">
-                                <i class="fas fa-search mr-2"></i> Cari Peserta Lain
-                            </button>
-                        </div>
-                    </div>
-                `;
-
+                // Tampilkan Kartunya!
+                renderKartuPeserta(peserta);
             } else {
-                // Jika ID tidak ada, tampilkan notifikasi di form pencarian
+                // Cek kalau pending/ditolak
                 const pesertaPending = DATA_REGISTRATIONS.find(p => String(p.idPeserta).toUpperCase() === idCariKapital);
                 
                 if (pesertaPending) {
-                     const pesanPending = `Mohon maaf, pendaftaran dengan ID "${idCariKapital}" masih dalam proses verifikasi atau perlu perbaikan berkas. Silakan hubungi Operator Sekolah Anda.`;
-                     showModal('Sedang Diproses', pesanPending, 'info', false, 5000);
+                    tampilkanError(`Pendaftaran dengan ID <b>${idCariKapital}</b> masih dalam proses verifikasi atau memerlukan perbaikan berkas. Silakan hubungi Operator Sekolah Anda.`);
                 } else {
-                     const pesanNotFound = `Peserta dengan ID "${idCariKapital}" tidak ditemukan dalam sistem. Pastikan 5 digit ID yang Anda ketik sudah benar.`;
-                     showModal('Tidak Ditemukan', pesanNotFound, 'error', false, 5000);
+                    tampilkanError(`Peserta dengan ID <b>${idCariKapital}</b> tidak ditemukan dalam sistem kami.`);
                 }
             }
         }
 
-        // Helper Fungsi Singkat Nama (Hanya 2 kata depan, sisanya inisial)
+        function tampilkanError(pesan) {
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('search-state').classList.add('hidden');
+            document.getElementById('card-container').classList.add('hidden');
+            document.getElementById('card-actions').classList.add('hidden');
+            
+            document.getElementById('error-state').classList.remove('hidden');
+            document.getElementById('error-message').innerHTML = pesan;
+        }
+
+        function tampilkanPencarian() {
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('error-state').classList.add('hidden');
+            document.getElementById('card-container').classList.add('hidden');
+            document.getElementById('card-actions').classList.add('hidden');
+            
+            document.getElementById('search-state').classList.remove('hidden');
+            
+            // Listener untuk input manual
+            document.getElementById('input-cek-id').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    cariPesertaManual();
+                }
+            });
+        }
+
+        // Helper Fungsi
         function abbreviateName(name) {
             let words = name.trim().split(/\s+/);
             if (words.length <= 2) return name;
@@ -359,7 +213,6 @@
             return result;
         }
 
-        // Helper untuk API Thumbnail Drive
         function getCleanDriveImage(url) {
             if (!url) return '';
             const match = url.match(/(?:drive\.google\.com\/file\/d\/|drive\.google\.com\/open\?id=|drive\.google\.com\/uc\?id=)([-\w]+)/);
@@ -367,6 +220,81 @@
                 return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w600`; 
             }
             return url;
+        }
+
+        // FUNGSI RENDER TAMPILAN KARTU (Ditempel langsung ke halaman, bukan Modal)
+        function renderKartuPeserta(reg) {
+            const shortName = abbreviateName(reg.namaPeserta);
+            const cleanFotoUrl = getCleanDriveImage(reg.fotoUrl);
+            const fotoElement = reg.fotoUrl 
+                ? `<img src="${cleanFotoUrl}" class="w-24 h-32 object-cover rounded-xl border-[3px] border-white shadow-md bg-gray-50 flex-shrink-0" referrerpolicy="no-referrer" alt="Foto">` 
+                : `<div class="w-24 h-32 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs text-center rounded-xl bg-white shadow-sm flex-shrink-0">Foto Kosong</div>`;
+
+            // QR Code Asli untuk ID Peserta (Bisa di-scan ulang oleh panitia)
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://gurubogor.github.io/cekdatapeserta/?id=${reg.idPeserta}&margin=0`;
+
+            const htmlKartu = `
+                <div class="bg-white rounded-3xl overflow-hidden shadow-2xl border border-orange-200 font-sans relative">
+                    
+                    <div class="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-orange-200 to-transparent rounded-bl-full opacity-40 z-0 pointer-events-none"></div>
+                    <div class="absolute bottom-0 left-0 w-40 h-40 bg-gradient-to-tr from-blue-100 to-transparent rounded-tr-full opacity-60 z-0 pointer-events-none"></div>
+                    <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] z-0 pointer-events-none"></div>
+
+                    <div class="bg-gradient-to-r from-orange-600 to-orange-400 px-5 py-4 flex items-center gap-4 relative z-10 shadow-sm">
+                        <div class="h-16 flex-shrink-0 bg-white p-1 rounded-lg">
+                            <img src="https://i.ibb.co.com/Wvf6CP6Y/Cover-Lomba-2.png" class="h-full w-auto object-contain" alt="Logo">
+                        </div>
+                        <div class="text-left text-white flex-grow">
+                            <h2 class="text-[15px] font-black uppercase tracking-wider leading-tight drop-shadow-md">Kartu Peserta Lomba</h2>
+                            <p class="text-xs font-semibold opacity-90 mt-0.5 uppercase tracking-wide">Tingkat Kec. Sukamakmur<br>Tahun 2026</p>
+                        </div>
+                    </div>
+
+                    <div class="p-6 flex gap-5 items-center relative z-10 border-b border-gray-100">
+                        ${fotoElement}
+                        <div class="flex flex-col justify-center flex-grow min-w-0">
+                            <h3 class="text-xl font-extrabold text-gray-900 leading-tight mb-2 truncate" title="${reg.namaPeserta}">${shortName}</h3>
+                            <div class="inline-flex items-center bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1.5 rounded-lg text-sm font-black tracking-widest shadow-sm w-max">
+                                <i class="fas fa-id-badge mr-2 opacity-70"></i> ${reg.idPeserta}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="px-6 py-5 relative z-10 space-y-3 text-sm">
+                        <div class="flex justify-between border-b border-gray-100 pb-2">
+                            <span class="font-bold text-gray-500 uppercase text-xs">NISN</span>
+                            <span class="font-mono font-bold text-gray-800">${reg.nisn}</span>
+                        </div>
+                        <div class="flex flex-col border-b border-gray-100 pb-2">
+                            <span class="font-bold text-gray-500 uppercase text-xs mb-1">Asal Sekolah</span>
+                            <span class="font-bold text-gray-800 text-base leading-tight">${reg.namaSekolah}</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="font-bold text-gray-500 uppercase text-xs mb-1">Cabang Lomba</span>
+                            <span class="font-extrabold text-orange-600 text-base leading-tight">${reg.lomba}</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center relative z-10">
+                        <div class="text-xs text-gray-500 font-medium">
+                            <p class="font-bold text-green-600 mb-1"><i class="fas fa-check-circle"></i> Terverifikasi</p>
+                            <p>Bawa kartu ini<br>saat daftar ulang.</p>
+                        </div>
+                        <img src="${qrUrl}" alt="QR Validasi" class="w-16 h-16 rounded border border-gray-300 p-1 bg-white shadow-sm">
+                    </div>
+
+                </div>
+            `;
+
+            // Tampilkan ke halaman
+            document.getElementById('search-state').classList.add('hidden');
+            document.getElementById('error-state').classList.add('hidden');
+            
+            const container = document.getElementById('card-container');
+            container.innerHTML = htmlKartu;
+            container.classList.remove('hidden');
+            
+            document.getElementById('card-actions').classList.remove('hidden');
         }
     </script>
 </body>
