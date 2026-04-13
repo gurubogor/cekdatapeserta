@@ -44,11 +44,38 @@
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+        
+        .scanner-line {
+            width: 100%; height: 2px; background: #f97316; position: absolute; top: 0; left: 0;
+            box-shadow: 0 0 10px #f97316, 0 0 20px #f97316; animation: scan 2s infinite linear;
+        }
+        @keyframes scan { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
     </style>
 </head>
 <body class="bg-gray-100 font-sans min-h-screen flex flex-col" onload="initApp()">
 
-    <div id="main-container" class="flex-grow flex flex-col items-center justify-center p-4">
+    <div id="customModal" class="fixed inset-0 bg-black bg-opacity-50 z-[80] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 transform transition-all scale-95 border border-orange-100 relative overflow-hidden" id="modalContent">
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-orange-400"></div>
+            <div class="text-center mb-4">
+                <i id="modalIcon" class="fas fa-info-circle text-5xl mb-3 text-orange-500"></i>
+                <h3 id="modalTitle" class="text-2xl font-extrabold text-gray-900">Informasi</h3>
+            </div>
+            <p id="modalMessage" class="text-center text-gray-600 mb-8 text-sm md:text-base">Pesan di sini.</p>
+            <button id="btn-close-modal" onclick="closeModal()" class="w-full bg-gradient-to-r from-orange-500 to-orange-400 text-white py-3.5 rounded-xl hover:from-orange-600 hover:to-orange-500 font-bold transition shadow-lg shadow-orange-500/30">Tutup</button>
+        </div>
+    </div>
+
+    <div id="qrModal" class="fixed inset-0 bg-black bg-opacity-95 z-[60] hidden flex flex-col items-center justify-center p-4">
+        <h3 class="text-white text-lg font-bold mb-4 text-center">Arahkan Kamera ke QR Code Peserta</h3>
+        <div id="reader" class="w-full max-w-sm rounded-xl overflow-hidden bg-black shadow-2xl shadow-orange-500/20 border-4 border-orange-500"></div>
+        <p class="text-orange-300 mt-4 text-sm font-medium text-center px-4" id="qr-status-text">Meminta akses kamera...</p>
+        <button onclick="closeScanner()" class="mt-8 bg-red-500 text-white px-8 py-3 rounded-full font-bold hover:bg-red-600 transition shadow-lg flex items-center">
+            <i class="fas fa-times mr-2"></i> Batal / Tutup Kamera
+        </button>
+    </div>
+
+    <div id="main-container" class="flex-grow flex flex-col items-center justify-center p-4 w-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-orange-50/50">
         
         <div id="loading-state" class="text-center py-10 flex flex-col items-center justify-center w-full">
             <div class="loader mb-4"></div>
@@ -61,12 +88,12 @@
             </div>
             <h2 class="text-2xl font-bold text-gray-800 mb-2">Data Tidak Ditemukan</h2>
             <p id="error-message" class="text-gray-600 mb-6 text-sm"></p>
-            <a href="cek-peserta.html" class="inline-block bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition shadow-md">
+            <button onclick="tampilkanPencarian()" class="inline-block bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition shadow-md w-full">
                 <i class="fas fa-search mr-2"></i> Coba Cari Lagi
-            </a>
+            </button>
         </div>
 
-        <div id="search-state" class="hidden w-full max-w-lg bg-white p-6 md:p-8 rounded-3xl shadow-xl border border-orange-100 relative overflow-hidden mt-10">
+        <div id="search-state" class="hidden w-full max-w-lg bg-white p-6 md:p-8 rounded-3xl shadow-xl border border-orange-100 relative overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-orange-400 z-20"></div>
             <div class="text-center mb-6">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-orange-100 text-orange-500 rounded-2xl mb-4">
@@ -77,22 +104,28 @@
             </div>
             <div class="flex space-x-2">
                 <input type="text" id="input-cek-id" maxlength="5" style="text-transform: uppercase;" class="flex-grow w-full appearance-none rounded-xl border-2 border-gray-200 px-4 py-3 text-lg tracking-widest font-mono text-center text-gray-900 focus:outline-none focus:ring-0 focus:border-orange-500 bg-gray-50" placeholder="A001">
+                <button onclick="openScanner()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl transition shadow-inner border border-gray-200 flex items-center justify-center" title="Scan QR Code dengan Kamera">
+                    <i class="fas fa-qrcode text-xl"></i>
+                </button>
                 <button onclick="cariPesertaManual()" class="bg-gradient-to-r from-orange-500 to-orange-400 text-white font-bold px-6 rounded-xl shadow-md hover:opacity-90">
                     <i class="fas fa-search"></i>
                 </button>
             </div>
+            <p class="text-xs text-gray-400 mt-4 text-center">Contoh: A001, B012, C105</p>
+            <div class="mt-6 text-center border-t border-gray-100 pt-4">
+                <a href="https://gurubogor.github.io/lombasukamakmur/" class="text-orange-500 text-sm font-bold hover:underline">
+                    <i class="fas fa-home mr-1"></i> Kembali ke Beranda Utama
+                </a>
+            </div>
         </div>
 
-        <div id="card-container" class="hidden w-full max-w-md mx-auto my-4 transition-all duration-300">
+        <div id="card-container" class="hidden w-full max-w-md mx-auto transition-all duration-300">
             </div>
         
-        <div id="card-actions" class="hidden w-full max-w-md mx-auto mt-4 mb-8 space-y-3 px-2">
-            <button onclick="window.print()" class="w-full bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-900 transition flex justify-center items-center shadow-md">
-                <i class="fas fa-print mr-2"></i> Cetak / Simpan PDF
+        <div id="card-actions" class="hidden w-full max-w-md mx-auto mt-4 px-2">
+            <button onclick="tampilkanPencarian()" class="w-full bg-red-50 text-red-600 border-2 border-red-200 py-3.5 rounded-xl font-extrabold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-300 flex justify-center items-center shadow-sm">
+                <i class="fas fa-times-circle mr-2 text-lg"></i> Tutup & Kembali
             </button>
-            <a href="https://gurubogor.github.io/lombasukamakmur/" class="w-full bg-white border border-gray-300 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-50 transition flex justify-center items-center shadow-sm block text-center">
-                <i class="fas fa-home mr-2"></i> Kembali ke Beranda Utama
-            </a>
         </div>
 
     </div>
@@ -102,6 +135,8 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwgiaujeKcPpf2HQWHKZcICxsrFAlIvdgV4hq6EuGEIY40IaX14wu80BwftWIrr38YY/exec";
 
         let DATA_REGISTRATIONS = [];
+        let html5QrCode; // Instance untuk scanner QR
+        let globalModalTimer;
 
         // Eksekusi utama saat halaman dimuat
         async function initApp() {
@@ -114,11 +149,20 @@
 
             if (idFromUrl) {
                 // Jika ada ID di URL, langsung proses datanya
+                document.getElementById('input-cek-id').value = idFromUrl;
                 prosesDataLangsung(idFromUrl);
             } else {
                 // Jika tidak ada ID, tampilkan form pencarian biasa
                 tampilkanPencarian();
             }
+            
+            // Tambahkan listener untuk input enter
+            document.getElementById('input-cek-id').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    cariPesertaManual();
+                }
+            });
         }
 
         async function fetchDatabase() {
@@ -135,17 +179,22 @@
             }
         }
 
+        // --- FUNGSI PENCARIAN MANUAL ---
         function cariPesertaManual() {
             const inputVal = document.getElementById('input-cek-id').value.trim();
             if(inputVal.length !== 5) {
-                alert("Format ID salah. Harus 5 karakter.");
+                showModal('Format Salah', 'Harap masukkan persis 5 digit ID Peserta. Contoh: A001', 'error');
                 return;
             }
-            // Tambahkan parameter ke URL tanpa reload halaman (opsional, agar link bisa dicopy)
+            
+            // Ubah URL bar agar link bisa di-copy tanpa reload
             window.history.pushState({}, '', '?id=' + inputVal.toUpperCase());
             
             // Kembalikan ke state loading sebentar
             document.getElementById('search-state').classList.add('hidden');
+            document.getElementById('error-state').classList.add('hidden');
+            document.getElementById('card-container').classList.add('hidden');
+            document.getElementById('card-actions').classList.add('hidden');
             document.getElementById('loading-state').classList.remove('hidden');
             
             setTimeout(() => {
@@ -168,13 +217,14 @@
                 const pesertaPending = DATA_REGISTRATIONS.find(p => String(p.idPeserta).toUpperCase() === idCariKapital);
                 
                 if (pesertaPending) {
-                    tampilkanError(`Pendaftaran dengan ID <b>${idCariKapital}</b> masih dalam proses verifikasi atau memerlukan perbaikan berkas. Silakan hubungi Operator Sekolah Anda.`);
+                    tampilkanError(`Pendaftaran dengan ID <b class="text-orange-600">${idCariKapital}</b> masih dalam proses verifikasi atau memerlukan perbaikan berkas.<br><br>Silakan hubungi Operator Sekolah Anda.`);
                 } else {
-                    tampilkanError(`Peserta dengan ID <b>${idCariKapital}</b> tidak ditemukan dalam sistem kami.`);
+                    tampilkanError(`Peserta dengan ID <b class="text-red-600">${idCariKapital}</b> tidak ditemukan dalam sistem kami.`);
                 }
             }
         }
 
+        // --- STATE MANAGEMENT ---
         function tampilkanError(pesan) {
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('search-state').classList.add('hidden');
@@ -186,23 +236,115 @@
         }
 
         function tampilkanPencarian() {
+            // Hapus parameter URL agar ketika tombol ditutup URL kembali bersih
+            window.history.pushState({}, '', window.location.pathname);
+            document.getElementById('input-cek-id').value = '';
+
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('error-state').classList.add('hidden');
             document.getElementById('card-container').classList.add('hidden');
             document.getElementById('card-actions').classList.add('hidden');
             
             document.getElementById('search-state').classList.remove('hidden');
+        }
+
+        // --- LOGIKA SCANNER QR CODE KAMERA ---
+        function openFormModal(modalId) { document.getElementById(modalId).classList.remove('hidden'); }
+        function closeFormModal(modalId) { document.getElementById(modalId).classList.add('hidden'); }
+
+        function openScanner() {
+            openFormModal('qrModal');
+            document.getElementById('qr-status-text').innerText = "Meminta akses kamera...";
             
-            // Listener untuk input manual
-            document.getElementById('input-cek-id').addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    cariPesertaManual();
-                }
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            // Menjalankan dengan kamera belakang
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+            .then(() => {
+                document.getElementById('qr-status-text').innerText = "Arahkan Kamera ke QR Code Peserta.";
+            })
+            .catch((err) => {
+                document.getElementById('qr-status-text').innerText = "Gagal mengakses kamera. Izinkan penggunaan kamera browser Anda.";
+                console.error("Camera access error:", err);
             });
         }
 
-        // Helper Fungsi
+        function onScanSuccess(decodedText, decodedResult) {
+            if(html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    closeFormModal('qrModal');
+                    processScannedText(decodedText);
+                }).catch((err) => console.error("Failed to stop scanner", err));
+            }
+        }
+        
+        function onScanFailure(error) { }
+
+        function closeScanner() {
+            if(html5QrCode) {
+                html5QrCode.stop().then(() => closeFormModal('qrModal')).catch(() => closeFormModal('qrModal'));
+            } else {
+                closeFormModal('qrModal');
+            }
+        }
+
+        function processScannedText(text) {
+            let extractedId = text;
+            if(text.includes('?id=')) extractedId = text.split('?id=')[1];
+            else if(text.includes('id=')) extractedId = text.split('id=')[1];
+            else if(text.includes('http')) extractedId = text.split('/').pop();
+            
+            extractedId = extractedId.trim().substring(0, 5).toUpperCase();
+            document.getElementById('input-cek-id').value = extractedId;
+            
+            if (extractedId.length === 5) {
+                // Trigger pencarian
+                cariPesertaManual();
+            } else {
+                showModal('Gagal', 'Format QR Code tidak dikenali atau ID tidak lengkap.', 'error');
+            }
+        }
+
+        // --- MANAJEMEN CUSTOM MODAL ---
+        function toggleScaleModal(modalId, contentId, show) {
+            const modal = document.getElementById(modalId);
+            const content = document.getElementById(contentId);
+            if(!modal || !content) return;
+
+            if (show) {
+                modal.classList.remove('hidden');
+                setTimeout(() => { content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
+            } else {
+                content.classList.remove('scale-100'); content.classList.add('scale-95');
+                setTimeout(() => { modal.classList.add('hidden'); }, 200);
+            }
+        }
+
+        function showModal(title, message, type = 'info', hideBtn = false, timeout = 3000) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMessage').innerHTML = message;
+            
+            const icon = document.getElementById('modalIcon');
+            if(type === 'success') icon.className = 'fas fa-check-circle text-5xl mb-3 text-green-500';
+            else if (type === 'error') icon.className = 'fas fa-times-circle text-5xl mb-3 text-red-500';
+            else icon.className = 'fas fa-info-circle text-5xl mb-3 text-orange-500';
+
+            const btn = document.getElementById('btn-close-modal');
+            hideBtn ? btn.classList.add('hidden') : btn.classList.remove('hidden');
+
+            toggleScaleModal('customModal', 'modalContent', true);
+
+            clearTimeout(globalModalTimer);
+            if(timeout > 0) globalModalTimer = setTimeout(() => closeModal(), timeout);
+        }
+
+        function closeModal() {
+            clearTimeout(globalModalTimer);
+            toggleScaleModal('customModal', 'modalContent', false);
+        }
+
+        // --- HELPER ---
         function abbreviateName(name) {
             let words = name.trim().split(/\s+/);
             if (words.length <= 2) return name;
@@ -222,31 +364,29 @@
             return url;
         }
 
-        // FUNGSI RENDER TAMPILAN KARTU (Ditempel langsung ke halaman, bukan Modal)
+        // --- RENDER TAMPILAN KARTU ---
         function renderKartuPeserta(reg) {
             const shortName = abbreviateName(reg.namaPeserta);
             const cleanFotoUrl = getCleanDriveImage(reg.fotoUrl);
             const fotoElement = reg.fotoUrl 
                 ? `<img src="${cleanFotoUrl}" class="w-24 h-32 object-cover rounded-xl border-[3px] border-white shadow-md bg-gray-50 flex-shrink-0" referrerpolicy="no-referrer" alt="Foto">` 
-                : `<div class="w-24 h-32 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs text-center rounded-xl bg-white shadow-sm flex-shrink-0">Foto Kosong</div>`;
+                : `<div class="w-24 h-32 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-[10px] text-center rounded-xl bg-white shadow-sm flex-shrink-0">Foto Kosong</div>`;
 
-            // QR Code Asli untuk ID Peserta (Bisa di-scan ulang oleh panitia)
+            // Update QR URL dynamically
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://gurubogor.github.io/cekdatapeserta/?id=${reg.idPeserta}&margin=0`;
 
             const htmlKartu = `
                 <div class="bg-white rounded-3xl overflow-hidden shadow-2xl border border-orange-200 font-sans relative">
-                    
-                    <div class="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-orange-200 to-transparent rounded-bl-full opacity-40 z-0 pointer-events-none"></div>
-                    <div class="absolute bottom-0 left-0 w-40 h-40 bg-gradient-to-tr from-blue-100 to-transparent rounded-tr-full opacity-60 z-0 pointer-events-none"></div>
-                    <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] z-0 pointer-events-none"></div>
+                    <div class="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-orange-200 to-transparent rounded-bl-full opacity-40 z-0 pointer-events-none"></div>
+                    <div class="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-blue-100 to-transparent rounded-tr-full opacity-60 z-0 pointer-events-none"></div>
 
-                    <div class="bg-gradient-to-r from-orange-600 to-orange-400 px-5 py-4 flex items-center gap-4 relative z-10 shadow-sm">
-                        <div class="h-16 flex-shrink-0 bg-white p-1 rounded-lg">
-                            <img src="https://i.ibb.co.com/Wvf6CP6Y/Cover-Lomba-2.png" class="h-full w-auto object-contain" alt="Logo">
+                    <div class="bg-gradient-to-r from-orange-600 to-orange-400 px-[19px] py-4 flex items-center gap-4 relative z-10 shadow-sm">
+                        <div class="h-16 md:h-20 max-w-[35%] flex-shrink-0 flex items-center justify-center">
+                            <img src="https://i.ibb.co.com/Wvf6CP6Y/Cover-Lomba-2.png" class="h-full w-auto object-contain drop-shadow-md" alt="Logo">
                         </div>
-                        <div class="text-left text-white flex-grow">
-                            <h2 class="text-[15px] font-black uppercase tracking-wider leading-tight drop-shadow-md">Kartu Peserta Lomba</h2>
-                            <p class="text-xs font-semibold opacity-90 mt-0.5 uppercase tracking-wide">Tingkat Kec. Sukamakmur<br>Tahun 2026</p>
+                        <div class="text-left text-white flex-grow min-w-0 flex flex-col justify-center">
+                            <h2 class="text-[13px] md:text-[15px] font-black uppercase tracking-wider leading-tight drop-shadow-md break-words w-full">Kartu Peserta Lomba</h2>
+                            <p class="text-[10px] md:text-xs font-semibold opacity-95 mt-0.5 uppercase tracking-wide leading-tight w-full">Tingkat Kec. Sukamakmur<br>Tahun 2026</p>
                         </div>
                     </div>
 
@@ -261,32 +401,26 @@
                     </div>
 
                     <div class="px-6 py-5 relative z-10 space-y-3 text-sm">
-                        <div class="flex justify-between border-b border-gray-100 pb-2">
-                            <span class="font-bold text-gray-500 uppercase text-xs">NISN</span>
-                            <span class="font-mono font-bold text-gray-800">${reg.nisn}</span>
+                        <div class="flex flex-col border-b border-gray-100 pb-3">
+                            <span class="font-bold text-gray-500 uppercase text-[11px] mb-1 tracking-wide">Asal Sekolah</span>
+                            <span class="font-bold text-gray-800 text-[15px] leading-tight">${reg.namaSekolah}</span>
                         </div>
-                        <div class="flex flex-col border-b border-gray-100 pb-2">
-                            <span class="font-bold text-gray-500 uppercase text-xs mb-1">Asal Sekolah</span>
-                            <span class="font-bold text-gray-800 text-base leading-tight">${reg.namaSekolah}</span>
-                        </div>
-                        <div class="flex flex-col">
-                            <span class="font-bold text-gray-500 uppercase text-xs mb-1">Cabang Lomba</span>
-                            <span class="font-extrabold text-orange-600 text-base leading-tight">${reg.lomba}</span>
+                        <div class="flex flex-col pb-1">
+                            <span class="font-bold text-gray-500 uppercase text-[11px] mb-1 tracking-wide">Cabang Lomba</span>
+                            <span class="font-extrabold text-orange-600 text-[15px] leading-tight">${reg.lomba}</span>
                         </div>
                     </div>
 
                     <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center relative z-10">
                         <div class="text-xs text-gray-500 font-medium">
-                            <p class="font-bold text-green-600 mb-1"><i class="fas fa-check-circle"></i> Terverifikasi</p>
-                            <p>Bawa kartu ini<br>saat daftar ulang.</p>
+                            <p class="font-bold text-green-600 mb-1 flex items-center"><i class="fas fa-check-circle mr-1"></i> Terverifikasi</p>
+                            <p>Tunjukkan kepada panitia<br>saat daftar ulang lomba.</p>
                         </div>
-                        <img src="${qrUrl}" alt="QR Validasi" class="w-16 h-16 rounded border border-gray-300 p-1 bg-white shadow-sm">
+                        <img src="${qrUrl}" alt="QR Validasi" class="w-16 h-16 rounded-xl border border-gray-300 p-1 bg-white shadow-sm">
                     </div>
-
                 </div>
             `;
 
-            // Tampilkan ke halaman
             document.getElementById('search-state').classList.add('hidden');
             document.getElementById('error-state').classList.add('hidden');
             
